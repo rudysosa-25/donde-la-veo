@@ -1,0 +1,9 @@
+name = "donde-la-veo-api"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+# Public worker variables (no secrets here)
+
+# Secrets (set via `wrangler secret put`):
+#   TMDB_API_KEY - TMDb API key
