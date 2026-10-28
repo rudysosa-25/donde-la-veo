@@ -162,8 +162,7 @@
     // Backend API base. In production, set window.__API_BASE__ to the
     // deployed worker URL (slice 5). Local dev falls back to port 8787.
     const API_BASE =
-      window.__API_BASE__ ||
-      (location.hostname === "localhost" ? "http://localhost:8787" : "");
+      "https://donde-la-veo-api.donde-la-veo-api.workers.dev";
 
     const inputTitulo = document.getElementById("titulo");
     const selectPais = document.getElementById("pais");
