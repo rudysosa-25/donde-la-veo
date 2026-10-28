@@ -123,6 +123,59 @@ async function justWatchSearch(query, country, language = "es") {
   }
 }
 
+// Gemini AI interpretation layer. When the direct search fails or the user's
+// text is vague/colloquial (e.g. "la peli de robots con delfines"), ask the
+// model to normalize it into {title, year, type}. The AI never invents
+// platforms — it only helps interpret what the user typed.
+const GEMINI_MODEL = "gemini-3.1-flash-lite";
+
+async function interpretWithAI(text, apiKey) {
+  const prompt = `El usuario busca una película o serie con un texto impreciso o coloquial. Tu tarea es identificar exactamente UNA película o serie real que mejor coincida con la descripción.
+
+Responde SOLO con JSON válido, sin markdown:
+{"title": "<título en español o inglés, el que dé mejor match en TMDb>", "year": <año o null>, "type": "movie"|"tv"|"unknown"}
+
+Si no podés identificar ninguna con confianza razonable, responde:
+{"title": null}
+
+Texto del usuario: "${text}"`;
+
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1 },
+        }),
+        signal: AbortSignal.timeout(25000),
+      },
+    );
+    if (!resp.ok) {
+      console.error("Gemini request failed:", resp.status);
+      return null;
+    }
+    const data = await resp.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    // Strip markdown fences if the model added them despite instructions.
+    const cleaned = text.replace(/```(json)?/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+    if (!parsed || typeof parsed.title !== "string" || !parsed.title.trim()) {
+      return null;
+    }
+    return {
+      title: parsed.title.trim(),
+      year: Number.isInteger(parsed.year) ? parsed.year : null,
+      type: parsed.type === "movie" || parsed.type === "tv" ? parsed.type : null,
+    };
+  } catch (err) {
+    console.error("Gemini interpretation error:", err);
+    return null; // Non-fatal: degraded search, never a hard failure
+  }
+}
+
 // TMDb catalog of providers for a region: { "8": "Netflix", ... }.
 // Needed to translate JustWatch packageIds into provider names.
 async function providerNameMap(type, country, apiKey) {
@@ -294,7 +347,23 @@ export default {
     }
 
     try {
-      const result = await searchProviders(env, query, country);
+      let result = await searchProviders(env, query, country);
+
+      // AI fallback: if nothing was found and a Gemini key is configured,
+      // ask the model to interpret the vague text and search again.
+      if (!result.found && env.GEMINI_API_KEY) {
+        const interpreted = await interpretWithAI(query, env.GEMINI_API_KEY);
+        if (interpreted) {
+          const retry = await searchProviders(env, interpreted.title, country);
+          if (retry.found) {
+            result = {
+              ...retry,
+              interpreted: { original: query, ai: interpreted },
+            };
+          }
+        }
+      }
+
       return json(result);
     } catch (err) {
       console.error("search error:", err);
