@@ -187,7 +187,7 @@ async function providerNameMap(type, country, apiKey) {
     );
     const map = {};
     for (const p of data.results || []) {
-      map[p.provider_id] = p.provider_name;
+      map[p.provider_id] = p.provider_name.trim();
     }
     return map;
   } catch {
