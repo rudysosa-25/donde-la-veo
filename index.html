@@ -3,28 +3,44 @@
 <head>
   <meta charset="UTF-8">
   <title>¿Dónde la veo?</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
-  <!-- Para que en iPhone se vea como app al agregar a pantalla de inicio -->
+  <!-- PWA / iOS: se ve como app al agregar a pantalla de inicio -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="¿Dónde la veo?">
+  <meta name="theme-color" content="#111111">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
 
   <style>
+    :root {
+      --bg: #111;
+      --card: #1e1e1e;
+      --border: #333;
+      --text: #eee;
+      --muted: #999;
+      --accent: #0a84ff;
+      --accent-active: #0060d0;
+      --ok: #30d158;
+      --error: #ff453a;
+    }
+    * { box-sizing: border-box; }
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       margin: 0;
-      padding: 1rem;
-      background: #111;
-      color: #eee;
+      padding: max(1rem, env(safe-area-inset-top)) 1rem 1rem;
+      background: var(--bg);
+      color: var(--text);
+      padding-bottom: env(safe-area-inset-bottom);
     }
     h1 {
       font-size: 1.4rem;
       text-align: center;
-      margin-bottom: 1rem;
+      margin: 0.5rem 0 1rem;
     }
     .card {
-      background: #1e1e1e;
+      background: var(--card);
       border-radius: 12px;
       padding: 1rem;
       max-width: 600px;
@@ -39,45 +55,83 @@
     }
     input, select, button {
       width: 100%;
-      padding: 0.6rem;
+      padding: 0.65rem;
       margin-bottom: 0.5rem;
       border-radius: 8px;
       border: 1px solid #444;
       font-size: 1rem;
       background: #121212;
-      color: #eee;
+      color: var(--text);
     }
     button {
-      background: #0a84ff;
+      background: var(--accent);
       border: none;
       font-weight: bold;
       cursor: pointer;
     }
-    button:active {
-      background: #0060d0;
+    button:disabled { opacity: 0.6; }
+    button:active:not(:disabled) { background: var(--accent-active); }
+    #resultado { margin-top: 1rem; font-size: 0.95rem; }
+    .title-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
     }
-    #resultado {
-      margin-top: 1rem;
-      font-size: 0.95rem;
+    .poster {
+      width: 80px;
+      border-radius: 8px;
+      flex-shrink: 0;
     }
-    .plataforma-grupo {
+    .title-meta { flex: 1; }
+    .title-meta p { margin: 0.25rem 0; }
+    .overview {
+      color: var(--muted);
+      font-size: 0.85rem;
       margin-top: 0.5rem;
-      padding-top: 0.5rem;
-      border-top: 1px solid #333;
     }
+    .grupo { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+    .grupo p { margin: 0 0 0.4rem; font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
     .tag {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
       background: #222;
       border-radius: 999px;
-      padding: 0.25rem 0.6rem;
-      margin: 0.1rem;
+      padding: 0.3rem 0.7rem;
+      margin: 0.15rem 0.15rem 0.15rem 0;
+      font-size: 0.85rem;
+      text-decoration: none;
+      color: var(--text);
+    }
+    a.tag:active { background: var(--accent-active); }
+    a.tag::after { content: " ↗"; font-size: 0.7rem; opacity: 0.6; }
+    .tag.sin-link::after { content: ""; }
+    .interpretado {
       font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+      font-style: italic;
     }
-    .error {
-      color: #ff453a;
+    .loading {
+      text-align: center;
+      color: var(--muted);
+      padding: 1rem 0;
     }
-    .ok {
-      color: #30d158;
+    .spinner {
+      display: inline-block;
+      width: 22px; height: 22px;
+      border: 3px solid #333;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error { color: var(--error); }
+    .ok { color: var(--ok); }
+    .fuente {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-align: right;
+      margin-top: 0.75rem;
     }
   </style>
 </head>
@@ -85,11 +139,11 @@
   <h1>¿Dónde la veo?</h1>
   <div class="card">
     <label for="titulo">Película o serie</label>
-    <input type="text" id="titulo" placeholder="Ej: The Matrix, Los Simpsons">
+    <input type="text" id="titulo" placeholder="Título, o incluso descibila: la peli de robots que boxean" autocomplete="off">
 
     <label for="pais">País</label>
     <select id="pais">
-      <option value="AR">Argentina</option>
+      <option value="AR" selected>Argentina</option>
       <option value="US">Estados Unidos</option>
       <option value="ES">España</option>
       <option value="MX">México</option>
@@ -105,129 +159,112 @@
   </div>
 
   <script>
-    // PONÉ ACÁ TU API KEY DE TMDb:
-    const API_KEY = "f55245eea0e3368324506e9738da89b3";  // <-- reemplazar
+    // Backend API base. In production, set window.__API_BASE__ to the
+    // deployed worker URL (slice 5). Local dev falls back to port 8787.
+    const API_BASE =
+      window.__API_BASE__ ||
+      (location.hostname === "localhost" ? "http://localhost:8787" : "");
 
     const inputTitulo = document.getElementById("titulo");
     const selectPais = document.getElementById("pais");
     const btnBuscar = document.getElementById("buscarBtn");
     const divResultado = document.getElementById("resultado");
 
+    // Remember the last selected country.
+    selectPais.value = localStorage.getItem("pais") || "AR";
+    selectPais.addEventListener("change", () => {
+      localStorage.setItem("pais", selectPais.value);
+    });
+
+    function esc(s) {
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function tagPlataforma(p) {
+      if (p.url) {
+        return `<a class="tag" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">${esc(p.name)}</a>`;
+      }
+      return `<span class="tag sin-link">${esc(p.name)}</span>`;
+    }
+
+    function grupo(nombre, plataformas) {
+      if (!plataformas || plataformas.length === 0) return "";
+      return `<div class="grupo"><p>${nombre}</p>${plataformas.map(tagPlataforma).join("")}</div>`;
+    }
+
+    function mostrarCargando() {
+      divResultado.innerHTML = `<div class="loading"><div class="spinner"></div><p>Buscando…</p></div>`;
+    }
+
     async function buscarTitulo() {
       const titulo = inputTitulo.value.trim();
       const region = selectPais.value;
 
       divResultado.innerHTML = "";
-
       if (!titulo) {
         divResultado.innerHTML = "<p class='error'>Escribí un título primero.</p>";
         return;
       }
 
+      btnBuscar.disabled = true;
+      mostrarCargando();
+
       try {
-        // 1) Buscar película/serie por nombre (search/multi)
-        const urlBusqueda =
-          `https://api.themoviedb.org/3/search/multi?api_key=${API_KEY}` +
-          `&query=${encodeURIComponent(titulo)}&language=es-ES`;
+        const resp = await fetch(
+          `${API_BASE}/api/search?q=${encodeURIComponent(titulo)}&country=${region}`,
+        );
+        if (!resp.ok) throw new Error(`API ${resp.status}`);
+        const data = await resp.json();
 
-        const respBusqueda = await fetch(urlBusqueda);
-        if (!respBusqueda.ok) {
-          throw new Error("Error en la búsqueda (" + respBusqueda.status + ")");
-        }
-        const datosBusqueda = await respBusqueda.json();
-
-        if (!datosBusqueda.results || datosBusqueda.results.length === 0) {
-          divResultado.innerHTML = "<p class='error'>No encontré ningún resultado con ese título.</p>";
+        if (!data.found) {
+          divResultado.innerHTML = "<p class='error'>No encontré ese título. Probá con otro nombre.</p>";
           return;
         }
 
-        // Tomamos el primer resultado que sea movie o tv
-        const resultado = datosBusqueda.results.find(r =>
-          r.media_type === "movie" || r.media_type === "tv"
-        ) || datosBusqueda.results[0];
-
-        const id = resultado.id;
-        const tipo = resultado.media_type; // movie o tv
-        const nombre = resultado.title || resultado.name || titulo;
-        const anio = (resultado.release_date || resultado.first_air_date || "").slice(0, 4);
-
-        // 2) Pedir proveedores (watch/providers)
-        const urlProviders =
-          `https://api.themoviedb.org/3/${tipo}/${id}/watch/providers?api_key=${API_KEY}`;
-
-        const respProviders = await fetch(urlProviders);
-        if (!respProviders.ok) {
-          throw new Error("Error al obtener plataformas (" + respProviders.status + ")");
+        const t = data.title;
+        let html = `<div class="title-row">`;
+        if (t.poster) {
+          html += `<img class="poster" src="${esc(t.poster)}" alt="" loading="lazy">`;
         }
-        const datosProviders = await respProviders.json();
+        html += `<div class="title-meta">
+          <p><strong>${esc(t.name)}</strong> ${t.year ? `<span style="color:var(--muted)">(${esc(t.year)})</span>` : ""}</p>
+          <p style="color:var(--muted);font-size:0.8rem">${t.type === "tv" ? "Serie" : "Película"}</p>
+        </div></div>`;
 
-        const porRegion = (datosProviders.results || {})[region];
+        if (data.interpreted) {
+          html += `<p class="interpretado">Interpreté tu búsqueda como: “${esc(data.interpreted.ai.title)}”</p>`;
+        }
 
-        // Armamos la salida
-        let html = `<p class='ok'><strong>${nombre}</strong> ${anio ? "(" + anio + ")" : ""}</p>`;
-        html += `<p>Región seleccionada: <strong>${region}</strong></p>`;
-
-        if (!porRegion) {
-          html += "<p class='error'>Para este título no figuran plataformas en esa región.</p>";
+        const prov = data.providers;
+        if (!prov || (!prov.flatrate.length && !prov.rent.length && !prov.buy.length)) {
+          html += `<p class="error">No figuran plataformas de streaming para este título en ${esc(region)}.</p>`;
         } else {
-          const flatrate = porRegion.flatrate || [];
-          const buy = porRegion.buy || [];
-          const rent = porRegion.rent || [];
-
-          function listaNombres(arr) {
-            return arr.map(p => p.provider_name);
+          html += grupo("Incluido en suscripción", prov.flatrate);
+          html += grupo("Alquiler", prov.rent);
+          html += grupo("Compra", prov.buy);
+          if (prov.link) {
+            html += `<p class="fuente"><a href="${esc(prov.link)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">Ver en TMDb</a></p>`;
           }
+        }
 
-          const listaFlatrate = listaNombres(flatrate);
-          const listaBuy = listaNombres(buy);
-          const listaRent = listaNombres(rent);
-
-          const todas = new Set([...listaFlatrate, ...listaBuy, ...listaRent]);
-
-          if (todas.size === 0) {
-            html += "<p class='error'>TMDb no muestra proveedores de streaming para este título en esa región.</p>";
-          } else {
-            html += "<div class='plataforma-grupo'>";
-            if (listaFlatrate.length > 0) {
-              html += "<p><strong>Incluido en suscripción:</strong></p>";
-              listaFlatrate.forEach(n => {
-                html += `<span class='tag'>${n}</span>`;
-              });
-            }
-            if (listaRent.length > 0) {
-              html += "<p><strong>Alquiler:</strong></p>";
-              listaRent.forEach(n => {
-                html += `<span class='tag'>${n}</span>`;
-              });
-            }
-            if (listaBuy.length > 0) {
-              html += "<p><strong>Compra:</strong></p>";
-              listaBuy.forEach(n => {
-                html += `<span class='tag'>${n}</span>`;
-              });
-            }
-            html += "</div>";
-          }
-
-          // Link a página de TMDb para ver más info
-          if (porRegion.link) {
-            html += `<p><a href="${porRegion.link}" target="_blank" style="color:#0a84ff;">Ver detalles en TMDb</a></p>`;
-          }
+        if (data.interpreted) {
+          html += `<p class="ok" style="font-size:0.8rem">✓ Resultado encontrado con ayuda de IA</p>`;
         }
 
         divResultado.innerHTML = html;
-
       } catch (err) {
         console.error(err);
         divResultado.innerHTML = "<p class='error'>Ocurrió un error al consultar el servicio.</p>";
+      } finally {
+        btnBuscar.disabled = false;
       }
     }
 
     btnBuscar.addEventListener("click", buscarTitulo);
     inputTitulo.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") {
-        buscarTitulo();
-      }
+      if (ev.key === "Enter") buscarTitulo();
     });
   </script>
 </body>
